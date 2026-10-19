@@ -317,7 +317,10 @@ function fail(e){
 const stu=id=>S.students.find(s=>s.id===id);
 const colorOf=s=>`var(--c${(s&&Number.isInteger(s.color))?s.color%6:0})`;
 const active=()=>S.students.filter(s=>s.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
-const lessonAmt=l=>(Number(l.hours)||0)*(Number(l.rate)||0);
+const lessonAmt=l=>l.billing==='session'?(Number(l.price)||0)*(Number(l.sessions)||1):(Number(l.hours)||0)*(Number(l.rate)||0);
+const priceText=s=>s.billing==='session'
+  ?(s.sessionPrice?`${money(s.sessionPrice)} / 堂（${hrs(s.sessionHours||0)} 小時）`:'未填每堂價格')
+  :(s.rate?`${money(s.rate)} / 小時`:'未填時薪');
 const slotsText=s=>(s.slots||[]).slice().sort((a,b)=>ORDER.indexOf(a.day)-ORDER.indexOf(b.day)||toMin(a.start)-toMin(b.start)).map(x=>`週${WD[x.day]} ${x.start}–${x.end}`).join('、');
 
 /* ---------- summary ---------- */
@@ -341,7 +344,7 @@ function cardHTML(s){
     <div class="meta">${esc([s.subject,s.location].filter(Boolean).join(' · '))||'&nbsp;'}</div>
     ${s.slots&&s.slots.length?`<div class="slots">${esc(slotsText(s))}</div>`:''}
     ${s.progress?`<div class="prog"><span class="lbl-inline">進度</span>${esc(s.progress)}</div>`:''}
-    <div class="card-foot"><span class="num">${s.rate?money(s.rate)+' / 小時':'未填時薪'}</span>${ex}</div>
+    <div class="card-foot"><span class="num">${priceText(s)}</span>${ex}</div>
   </button>`;
 }
 function renderStudents(){
@@ -428,7 +431,7 @@ function lessonRow(l){
   return `<div class="row">
     <div class="date"><b>${d.slice(5).replace('-','/')}</b><span>週${wdOf(d)}</span></div>
     <div class="body" data-edit-lesson="${l.id}" role="button" tabindex="0">
-      <div class="who"><span class="dot" style="background:${colorOf(s)}"></span>${esc(s?s.name:'（已刪除的學生）')}<span class="h">${hrs(l.hours)} 小時・${money(lessonAmt(l))}</span></div>
+      <div class="who"><span class="dot" style="background:${colorOf(s)}"></span>${esc(s?s.name:'（已刪除的學生）')}<span class="h">${hrs(l.hours)} 小時・${l.billing==='session'?(l.sessions||1)+' 堂・':''}${money(lessonAmt(l))}</span></div>
       ${l.content?`<div class="what">${esc(l.content)}</div>`:''}
       ${l.homework?`<div class="hw">作業：${esc(l.homework)}</div>`:''}
     </div>
@@ -503,7 +506,7 @@ function openStudent(id,refresh){
     <dl class="info">
       ${row('年級',esc(s.grade))}${row('學校',esc(s.school))}${row('科目',esc(s.subject))}
       ${row('上課時段',esc(slotsText(s)))}${row('地點',esc(s.location))}
-      ${row('時薪',s.rate?`<span class="num">${money(s.rate)}</span>`:'')}${row('開始日期',esc(s.startDate))}
+      ${row('收費',`<span class="num">${priceText(s)}</span>`)}${row('開始日期',esc(s.startDate))}
       ${row('使用教材',esc(s.textbook))}${row('目前進度',esc(s.progress))}${row('弱點',esc(s.weakness))}
       ${row('下次考試',s.examDate?`${esc(s.examName||'考試')}・${esc(s.examDate)}${daysUntil(s.examDate)>=0?`（還有 ${daysUntil(s.examDate)} 天）`:''}`:'')}
       ${row('家長',esc(s.parentName))}
@@ -534,7 +537,11 @@ function studentForm(id){
     </fieldset>
     <fieldset><legend>上課安排</legend>
       <div class="fld full"><label>每週時段</label><div id="slots">${(s.slots||[]).map(slotRow).join('')}</div><div><button class="btn small" type="button" data-addslot>＋ 加一個時段</button></div></div>
-      ${f('location','地點','text',false,'到府／線上／咖啡廳')}${f('rate','時薪（元）','number')}
+      ${f('location','地點','text',false,'到府／線上／咖啡廳')}
+      <div class="fld"><label for="s-billing">收費方式</label><select id="s-billing" name="billing"><option value="hour"${s.billing!=='session'?' selected':''}>按時薪</option><option value="session"${s.billing==='session'?' selected':''}>按堂（固定價格）</option></select></div>
+      <div class="fld" data-bill="hour"><label for="s-rate">時薪（元）</label><input id="s-rate" name="rate" type="number" min="0" step="10" inputmode="numeric" value="${esc(s.rate??'')}"></div>
+      <div class="fld" data-bill="session"><label for="s-sessionPrice">每堂價格（元）</label><input id="s-sessionPrice" name="sessionPrice" type="number" min="0" step="50" inputmode="numeric" value="${esc(s.sessionPrice??'')}" placeholder="例如：1000"></div>
+      <div class="fld" data-bill="session"><label for="s-sessionHours">每堂時數（小時）</label><input id="s-sessionHours" name="sessionHours" type="number" min="0.5" step="0.5" inputmode="decimal" value="${esc(s.sessionHours??'')}" placeholder="例如：1.5"></div>
       ${f('startDate','開始上課日','date')}
       <div class="fld"><label class="check" style="margin-top:22px"><input type="checkbox" name="active"${s.active!==false?' checked':''}> 目前還在上課</label></div>
     </fieldset>
@@ -551,6 +558,7 @@ function studentForm(id){
     <div class="btnrow end">${id?`<button class="btn danger" type="button" data-del-student="${id}">刪除學生</button>`:''}<button class="btn" type="button" data-act="close">取消</button><button class="btn primary" type="submit">儲存</button></div>
   </form>`;
   openSheet(id?`編輯 ${esc(s.name)}`:'新增學生',html,{type:'student-form',id});
+  syncBilling();
   $('#s-name').focus();
 }
 function lessonForm(id,presetStudent,presetDate,presetHours){
@@ -560,13 +568,14 @@ function lessonForm(id,presetStudent,presetDate,presetHours){
   if(!l&&!act.length){toast('請先新增學生');return}
   const sid=l?l.studentId:(presetStudent||act[0].id);
   const ps=stu(sid);
-  const defH=l?l.hours:(presetHours>0?presetHours:(ps&&ps.slots&&ps.slots[0]?slotHours(ps.slots[0]):2));
+  const defH=l?l.hours:(presetHours>0?presetHours:(ps&&ps.slots&&ps.slots[0]?slotHours(ps.slots[0]):(ps&&ps.billing==='session'&&ps.sessionHours?ps.sessionHours:2)));
   const list=l&&!act.find(s=>s.id===sid)&&stu(sid)?act.concat([stu(sid)]):act;
   const html=`<form class="f" id="lesson-form" novalidate>
     <fieldset>
       <div class="fld full"><label for="l-stu">學生</label><select id="l-stu" name="studentId">${list.map(s=>`<option value="${s.id}"${s.id===sid?' selected':''}>${esc(s.name)}${s.subject?'・'+esc(s.subject):''}</option>`).join('')}</select></div>
       <div class="fld"><label for="l-date">日期</label><input id="l-date" name="date" type="date" value="${esc(l?l.date:(presetDate||today()))}"></div>
       <div class="fld"><label for="l-hours">時數（小時）</label><input id="l-hours" name="hours" type="number" min="0.5" step="0.5" inputmode="decimal" value="${hrs(defH)}"></div>
+      <div class="fld" id="l-sess-wrap" hidden><label for="l-sessions">堂數</label><input id="l-sessions" name="sessions" type="number" min="1" step="1" inputmode="numeric" value="${l&&l.sessions?l.sessions:1}"></div>
       <div class="fld full"><label for="l-content">教了什麼</label><textarea id="l-content" name="content" placeholder="例如：講解 2-3 正餘弦定理，寫課本例題 1–6">${esc(l?l.content:'')}</textarea></div>
       <div class="fld full"><label for="l-hw">出的作業</label><input id="l-hw" name="homework" type="text" value="${esc(l?l.homework:'')}" placeholder="例如：習作 p.45–47"></div>
       <div class="fld full"><label class="check"><input type="checkbox" name="paid"${l&&l.paid?' checked':''}> 這堂已收費</label></div>
@@ -578,12 +587,27 @@ function lessonForm(id,presetStudent,presetDate,presetHours){
   openSheet(id?'編輯上課紀錄':'記一堂課',html,{type:'lesson-form',id,back});
   updateAmt();
 }
+/* 這堂課用哪種收費：編輯舊紀錄時沿用當時的價格，新紀錄用學生目前的設定 */
+function formPricing(){
+  const s=stu($('#l-stu').value)||{};
+  const l=S.sheet&&S.sheet.id?S.lessons.find(x=>x.id===S.sheet.id):null;
+  if(l&&l.studentId===s.id)return {billing:l.billing||'hour',rate:Number(l.rate)||0,price:Number(l.price)||0,sessionHours:Number(l.sessionHours)||0};
+  return {billing:s.billing==='session'?'session':'hour',rate:Number(s.rate)||0,price:Number(s.sessionPrice)||0,sessionHours:Number(s.sessionHours)||0};
+}
 function updateAmt(){
   const el=$('#l-amt');if(!el)return;
-  const s=stu($('#l-stu').value);const h=Number($('#l-hours').value)||0;
-  const l=S.sheet&&S.sheet.id?S.lessons.find(x=>x.id===S.sheet.id):null;
-  const rate=l?Number(l.rate)||0:Number(s&&s.rate)||0;
-  el.textContent=rate?`以時薪 ${money(rate)} 計算：${money(rate*h)}`:'這位學生還沒填時薪，金額會算成 $0';
+  const p=formPricing();const h=Number($('#l-hours').value)||0;
+  $('#l-sess-wrap').hidden=p.billing!=='session';
+  if(p.billing==='session'){
+    const n=Number($('#l-sessions').value)||0;
+    el.textContent=p.price?`按堂計費 ${money(p.price)} / 堂 × ${n} 堂：${money(p.price*n)}`:'這位學生還沒填每堂價格，金額會算成 $0';
+  }else{
+    el.textContent=p.rate?`以時薪 ${money(p.rate)} 計算：${money(p.rate*h)}`:'這位學生還沒填時薪，金額會算成 $0';
+  }
+}
+function syncBilling(){
+  const b=$('#s-billing');if(!b)return;
+  document.querySelectorAll('[data-bill]').forEach(e=>e.hidden=e.dataset.bill!==b.value);
 }
 
 /* ---------- writes ---------- */
@@ -591,11 +615,12 @@ async function saveStudent(form){
   const fd=new FormData(form);const id=S.sheet.id;
   const name=(fd.get('name')||'').trim();
   if(!name){const e=$('#form-err');e.textContent='請填寫學生姓名';e.hidden=false;$('#s-name').focus();return}
+  if(fd.get('billing')==='session'&&!(Number(fd.get('sessionPrice'))>0)){const e=$('#form-err');e.textContent='按堂計費請填寫每堂價格';e.hidden=false;$('#s-sessionPrice').focus();return}
   const slots=[...form.querySelectorAll('.slot-row')].map(r=>({day:Number(r.querySelector('[data-k=day]').value),start:r.querySelector('[data-k=start]').value,end:r.querySelector('[data-k=end]').value})).filter(x=>x.start&&x.end);
   const prev=id?stu(id):{};
   const data={...prev};delete data.id;
   ['name','grade','school','subject','location','startDate','textbook','progress','weakness','examName','examDate','parentName','parentContact','notes'].forEach(k=>data[k]=(fd.get(k)||'').trim());
-  data.name=name;data.rate=Number(fd.get('rate'))||0;data.color=Number(fd.get('color'))||0;data.active=!!fd.get('active');data.slots=slots;
+  data.name=name;data.billing=fd.get('billing')==='session'?'session':'hour';data.rate=Number(fd.get('rate'))||0;data.sessionPrice=Number(fd.get('sessionPrice'))||0;data.sessionHours=Number(fd.get('sessionHours'))||0;data.color=Number(fd.get('color'))||0;data.active=!!fd.get('active');data.slots=slots;
   if(!id)data.createdAt=Date.now();
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{
@@ -610,8 +635,12 @@ async function saveLesson(form){
   if(!fd.get('date')){err.textContent='請選擇日期';err.hidden=false;return}
   if(!(h>0)){err.textContent='時數要大於 0';err.hidden=false;return}
   const prev=id?S.lessons.find(x=>x.id===id):null;
+  const p=formPricing();
+  const n=Math.round(Number(fd.get('sessions'))||0);
+  if(p.billing==='session'&&!(n>=1)){err.textContent='堂數至少 1 堂';err.hidden=false;return}
   const data={studentId:sid,date:fd.get('date'),hours:h,content:(fd.get('content')||'').trim(),homework:(fd.get('homework')||'').trim(),paid:!!fd.get('paid'),
-    rate:prev&&prev.studentId===sid?Number(prev.rate)||0:Number(s&&s.rate)||0,createdAt:prev?prev.createdAt||Date.now():Date.now()};
+    billing:p.billing,rate:p.rate,createdAt:prev?prev.createdAt||Date.now():Date.now()};
+  if(p.billing==='session'){data.price=p.price;data.sessionHours=p.sessionHours;data.sessions=n}
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{
     if(id)await db.doc('lessons/'+id).set(data);else await db.collection('lessons').add(data);
@@ -736,10 +765,22 @@ document.addEventListener('submit',e=>{
 document.addEventListener('change',e=>{
   if(e.target.id==='f-stu'){S.fStudent=e.target.value;render()}
   if(e.target.id==='f-paid'){S.fPaid=e.target.value;render()}
-  if(e.target.id==='l-stu')updateAmt();
+  if(e.target.id==='s-billing')syncBilling();
+  if(e.target.id==='l-stu'){
+    const p=formPricing();
+    if(!(S.sheet&&S.sheet.id)&&p.billing==='session'&&p.sessionHours){$('#l-hours').value=hrs(p.sessionHours);$('#l-sessions').value=1}
+    updateAmt();
+  }
   if(e.target.id==='import-file'&&e.target.files[0])readImport(e.target.files[0]);
 });
-document.addEventListener('input',e=>{if(e.target.id==='l-hours')updateAmt()});
+document.addEventListener('input',e=>{
+  if(e.target.id==='l-hours'){
+    const p=formPricing();const h=Number(e.target.value)||0;
+    if(p.billing==='session'&&p.sessionHours&&h>0)$('#l-sessions').value=Math.max(1,Math.round(h/p.sessionHours));
+    updateAmt();
+  }
+  if(e.target.id==='l-sessions')updateAmt();
+});
 
 /* ---------- boot ---------- */
 $('#today').textContent=(()=>{const d=new Date();return `${d.getFullYear()} 年 ${d.getMonth()+1} 月 ${d.getDate()} 日・星期${WD[d.getDay()]}`})();
