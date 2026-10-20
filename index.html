@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>家教聯絡簿</title>
+<title>家教排課表</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
@@ -145,6 +145,19 @@ details.inactive .grid{margin-top:10px;opacity:.75}
 }
 .day-item{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px dashed var(--line)}
 .day-item:last-child{border-bottom:0}
+.day-item .btnrow{flex-direction:column;align-items:stretch;gap:6px}
+.day-item .note{font-size:.84rem;background:var(--warn-soft);color:var(--ink);border-radius:6px;padding:3px 8px;margin-top:4px;overflow-wrap:anywhere;white-space:pre-wrap}
+.day-item .moved{font-size:.82rem;color:var(--muted);margin-top:2px}
+.links{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px}
+.link{all:unset;cursor:pointer;font-size:.84rem;color:var(--accent);font-weight:500;padding:2px 0}
+.link:hover{text-decoration:underline}
+.link.red{color:var(--stamp)}
+.link:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.ev .nt{font-weight:700;margin-left:2px}
+.move-from{background:var(--paper);border-radius:10px;padding:10px 12px;font-size:.9rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.move-from .arrow{color:var(--muted)}
+.day-item.is-cancelled>div:nth-child(1),.day-item.is-cancelled>div:nth-child(2){opacity:.5}
+.day-item.is-cancelled>div:nth-child(2) > div:first-child{text-decoration:line-through}
 .day-item .t{font-variant-numeric:tabular-nums;font-size:.86rem;line-height:1.3}
 .day-item .t span{color:var(--muted);font-size:.76rem}
 
@@ -186,6 +199,28 @@ tfoot td{font-weight:700;border-top:2px solid var(--line);border-bottom:0}
 td .due{color:var(--stamp);font-weight:700}
 td .ok{color:var(--ok)}
 td.act{display:flex;gap:6px;justify-content:flex-end}
+.forecast{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:22px;display:flex;flex-direction:column;gap:14px}
+.fc-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.fc-head h3,.sub-h{font-family:var(--f-display);font-size:1.12rem;margin:0}
+.sub-h{margin:0 0 10px}
+.fc-head .check{font-weight:400;font-size:.86rem;color:var(--muted)}
+.fc-sum{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 18px;font-variant-numeric:tabular-nums}
+.fc-sum .part{display:flex;flex-direction:column;min-width:0}
+.fc-sum .lbl{font-size:.76rem;color:var(--muted);letter-spacing:.06em}
+.fc-sum .part b{font-size:1.2rem}
+.fc-sum .part small{font-size:.78rem;color:var(--muted)}
+.fc-sum .op{color:var(--muted);font-size:1.2rem;padding-bottom:18px}
+.fc-sum .total b{font-size:1.9rem;font-family:var(--f-display);color:var(--accent)}
+.fc-sum .off{opacity:.4;text-decoration:line-through}
+.fc-bar{display:flex;height:12px;border-radius:999px;overflow:hidden;background:var(--paper)}
+.fc-bar span{display:block;height:100%}
+.fc-bar .b-done{background:var(--accent)}
+.fc-bar .b-up{background:var(--accent);opacity:.35}
+.fc-bar .b-miss{background:var(--warn);opacity:.55}
+.fc-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted)}
+.fc-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.fc-note{font-size:.8rem;color:var(--muted);margin:0}
+td .warn{color:var(--warn);font-weight:700}
 .backup{margin-top:22px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:.88rem;color:var(--muted)}
 
 /* sheet */
@@ -249,7 +284,7 @@ fieldset legend{font-size:.78rem;letter-spacing:.08em;color:var(--muted);margin-
 <div class="app">
   <header class="top">
     <div class="brand">
-      <h1>家教聯絡簿</h1>
+      <h1>家教排課表</h1>
       <p id="today"></p>
       <div class="who-bar" id="who" hidden><span id="who-name"></span><button class="btn small" type="button" id="signout">登出</button></div>
     </div>
@@ -317,7 +352,14 @@ function fail(e){
 const stu=id=>S.students.find(s=>s.id===id);
 const colorOf=s=>`var(--c${(s&&Number.isInteger(s.color))?s.color%6:0})`;
 const active=()=>S.students.filter(s=>s.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
-const lessonAmt=l=>l.billing==='session'?(Number(l.price)||0)*(Number(l.sessions)||1):(Number(l.hours)||0)*(Number(l.rate)||0);
+/* 只有「已上課」的才算錢；排定（還沒上）的課只出現在月曆 */
+const isDone=l=>l.status!=='planned';
+const doneLessons=()=>S.lessons.filter(isDone);
+const keyOf=l=>l.studentId||('guest:'+(l.guestName||''));
+const lessonName=l=>l.studentId?((stu(l.studentId)||{}).name||'（已刪除的學生）'):(l.guestName||'（未填名字）');
+const lessonColor=l=>l.studentId?colorOf(stu(l.studentId)):'var(--muted)';
+const keyName=k=>k.startsWith('guest:')?k.slice(6)+'（試教／臨時）':((stu(k)||{}).name||'（已刪除）');
+const lessonAmt=l=>l.billing==='fixed'?(Number(l.amount)||0):l.billing==='session'?(Number(l.price)||0)*(Number(l.sessions)||1):(Number(l.hours)||0)*(Number(l.rate)||0);
 const priceText=s=>s.billing==='session'
   ?(s.sessionPrice?`${money(s.sessionPrice)} / 堂（${hrs(s.sessionHours||0)} 小時）`:'未填每堂價格')
   :(s.rate?`${money(s.rate)} / 小時`:'未填時薪');
@@ -326,10 +368,10 @@ const slotsText=s=>(s.slots||[]).slice().sort((a,b)=>ORDER.indexOf(a.day)-ORDER.
 /* ---------- summary ---------- */
 function renderSummary(){
   const m=today().slice(0,7);
-  const ls=S.lessons.filter(l=>(l.date||'').startsWith(m));
+  const ls=doneLessons().filter(l=>(l.date||'').startsWith(m));
   const h=ls.reduce((a,l)=>a+(Number(l.hours)||0),0);
   const t=ls.reduce((a,l)=>a+lessonAmt(l),0);
-  const d=S.lessons.filter(l=>!l.paid).reduce((a,l)=>a+lessonAmt(l),0);
+  const d=doneLessons().filter(l=>!l.paid).reduce((a,l)=>a+lessonAmt(l),0);
   $('#sum-label').textContent=`${Number(m.slice(5))} 月時數`;
   $('#sum-hours').textContent=S.gotL?`${hrs(h)} 小時`:'–';
   $('#sum-total').textContent=S.gotL?money(t):'–';
@@ -368,13 +410,19 @@ function dayItems(ds){
     if(s.startDate&&ds<s.startDate)return;           // 還沒開始上課的日子不排
     (s.slots||[]).forEach(x=>{
       if(Number(x.day)!==wd)return;
-      const l=ls.find(l=>l.studentId===s.id&&!used.has(l.id));
+      // 已上課的紀錄（沒填時間，或時間和這個時段一樣）就對應到這個時段
+      const l=ls.find(l=>isDone(l)&&l.studentId===s.id&&!used.has(l.id)&&(!l.start||l.start===x.start));
       if(l)used.add(l.id);
-      items.push({s,x,l});
+      const key=ds+'@'+x.start;
+      const cancelled=!l&&(s.skips||[]).includes(key);
+      const movedTo=cancelled?S.lessons.find(m=>m.movedFrom===key&&m.studentId===s.id):null;
+      const note=(s.slotNotes||{})[key]||'';
+      items.push({s,x,l,cancelled,movedTo,note,key,start:x.start,end:x.end});
     });
   });
-  ls.forEach(l=>{if(!used.has(l.id))items.push({s:stu(l.studentId),x:null,l})}); // 補課、加課
-  items.sort((a,b)=>toMin(a.x?a.x.start:'23:59')-toMin(b.x?b.x.start:'23:59'));
+  // 其他：補課、加課、試教、排定的單次課
+  ls.forEach(l=>{if(!used.has(l.id))items.push({s:l.studentId?stu(l.studentId):null,x:null,l,cancelled:false,start:l.start||'',end:l.end||''})});
+  items.sort((a,b)=>toMin(a.start||'23:59')-toMin(b.start||'23:59'));
   const exams=S.students.filter(s=>s.active!==false&&s.examDate===ds);
   return {items,exams};
 }
@@ -388,37 +436,175 @@ function renderWeek(){
   for(let i=0;i<weeks*7;i++){
     const d=new Date(y,m-1,1-lead+i),ds=fmtDate(d),inM=d.getMonth()===m-1;
     const {items,exams}=dayItems(ds);
-    if(inM)items.forEach(it=>{if(it.x){planned++;plannedH+=slotHours(it.x)}if(it.l){done++;doneH+=Number(it.l.hours)||0}});
+    // 每堂課只算一次：已上課的算「已上」，其餘（固定時段或排定的單堂課）算「還沒上」，取消的不算
+    if(inM)items.forEach(it=>{
+      if(it.cancelled)return;
+      if(it.l&&isDone(it.l)){done++;doneH+=Number(it.l.hours)||0}
+      else{planned++;plannedH+=it.l?(Number(it.l.hours)||0):slotHours(it.x)}
+    });
     const evs=exams.map(s=>`<span class="ev exam">${esc(s.name)} ${esc(s.examName||'考試')}</span>`).join('')+
-      items.map(it=>{
-        const cls=it.l?'done':(ds<td?'miss':'');
-        return `<span class="ev ${cls}" style="--c:${colorOf(it.s)}"><span class="tm">${it.x?esc(it.x.start)+' ':''}</span>${esc(it.s?it.s.name:'（已刪除）')}</span>`;
+      items.filter(it=>!it.cancelled).map(it=>{
+        const cls=it.l&&isDone(it.l)?'done':(ds<td?'miss':'');
+        const name=it.l?lessonName(it.l):it.s.name;
+        const c=it.l?lessonColor(it.l):colorOf(it.s);
+        const hasNote=it.l?!!it.l.note:!!it.note;
+        return `<span class="ev ${cls}" style="--c:${c}"><span class="tm">${it.start?esc(it.start)+' ':''}</span>${esc(name)}${hasNote?'<span class="nt" aria-label="有備註">＊</span>':''}</span>`;
       }).join('');
-    cells+=`<button class="cell${inM?'':' out'}${ds===td?' today':''}${d.getDay()===0?' sun':''}" type="button" data-day="${ds}" aria-label="${d.getMonth()+1}月${d.getDate()}日，${items.length}堂課"><span class="dn">${d.getDate()}</span>${evs}</button>`;
+    cells+=`<button class="cell${inM?'':' out'}${ds===td?' today':''}${d.getDay()===0?' sun':''}" type="button" data-day="${ds}" aria-label="${d.getMonth()+1}月${d.getDate()}日，${items.filter(it=>!it.cancelled).length}堂課"><span class="dn">${d.getDate()}</span>${evs}</button>`;
   }
   const head=ORDER.map(d=>`<div${d===0?' class="sun"':''}>${WD[d]}</div>`).join('');
   return `<div class="section-head"><h2>課表月曆</h2>
     <div class="month-nav"><button class="btn small" type="button" data-calmonth="-1" aria-label="上個月">‹</button><b>${monthLabel(S.calMonth)}</b><button class="btn small" type="button" data-calmonth="1" aria-label="下個月">›</button>${S.calMonth!==td.slice(0,7)?`<button class="btn small" type="button" data-calmonth="0">回本月</button>`:''}</div></div>
-    <p class="muted num" style="margin:0 0 10px">本月排定 ${planned} 堂（約 ${hrs(plannedH)} 小時）・已記錄 ${done} 堂（${hrs(doneH)} 小時）</p>
+    <p class="muted num" style="margin:0 0 10px">${S.calMonth===td.slice(0,7)?'本月':'這個月'}共 <b style="color:var(--ink)">${done+planned} 堂（約 ${hrs(doneH+plannedH)} 小時）</b>＝ 已上課 ${done} 堂（${hrs(doneH)} 小時）＋ 還沒上 ${planned} 堂（${hrs(plannedH)} 小時）</p>
     <div class="cal-wrap"><div class="cal-head">${head}</div><div class="cal">${cells}</div></div>
-    <div class="cal-legend"><span><span class="ev">19:00 排定</span></span><span><span class="ev done">19:00 已上課</span></span><span><span class="ev miss">排定但沒記錄</span></span><span><span class="ev exam">考試</span></span><span>點日期看當天細節、記錄上課</span></div>`;
+    <div class="cal-legend"><span><span class="ev">19:00 排定</span></span><span><span class="ev done">19:00 已上課</span></span><span><span class="ev miss">排定但沒記錄</span></span><span><span class="ev exam">考試</span></span><span>點日期可以新增一堂課、記錄上課或取消當天的課</span></div>`;
 }
+const mdText=ds=>{const d=new Date(ds+'T00:00');return `${d.getMonth()+1}/${d.getDate()}（週${WD[d.getDay()]}）`};
 function openDay(ds){
   const d=new Date(ds+'T00:00');
   const {items,exams}=dayItems(ds);
-  const rows=items.map(it=>{
-    const s=it.s,l=it.l;
-    const t=it.x?`${esc(it.x.start)}<br><span>到 ${esc(it.x.end)}</span>`:`<span>${l?hrs(l.hours)+' 小時':''}</span>`;
-    const info=`<div class="who" style="display:flex;align-items:center;gap:6px;font-weight:700"><span class="dot" style="background:${colorOf(s)}"></span>${esc(s?s.name:'（已刪除的學生）')}${!it.x?'<span class="chip">加課</span>':''}</div>
-      <div class="muted" style="font-size:.84rem">${esc(s?[s.subject,s.location].filter(Boolean).join('・'):'')}</div>
-      ${l&&l.content?`<div style="font-size:.88rem;overflow-wrap:anywhere">${esc(l.content)}</div>`:''}`;
-    const right=l?stampHTML(l):(s?`<button class="btn small primary" type="button" data-logday="${s.id}" data-date="${ds}" data-hours="${it.x?slotHours(it.x):2}">記這堂課</button>`:'');
-    return `<div class="day-item"><div class="t">${t}</div><div style="min-width:0${l?';cursor:pointer':''}"${l?` data-edit-lesson="${l.id}" role="button" tabindex="0"`:''}>${info}</div>${right}</div>`;
-  }).join('');
+  const row=it=>{
+    const l=it.l,s=it.s;
+    const name=l?lessonName(l):s.name;
+    const color=l?lessonColor(l):colorOf(s);
+    const sub=l&&!l.studentId?'試教／臨時':(s?[s.subject,s.location].filter(Boolean).join('・'):'');
+    const t=it.start?`${esc(it.start)}${it.end?`<br><span>到 ${esc(it.end)}</span>`:''}`:`<span>${l?hrs(l.hours)+' 小時':''}</span>`;
+    const note=l?l.note:it.note;
+    let tag='',right='',links='',extra='';
+    if(it.cancelled){
+      const m=it.movedTo;
+      tag=m?'<span class="chip">已調課</span>':'<span class="chip due">已取消</span>';
+      if(m)extra=`<div class="moved">已調到 ${mdText(m.date)}${m.start?' '+esc(m.start):''}</div>`;
+      right=m&&isDone(m)?''
+        :m?`<button class="btn small" type="button" data-unmove="${m.id}" data-sid="${s.id}" data-key="${it.key}">取消調課</button>`
+        :`<button class="btn small" type="button" data-unskip="${s.id}" data-key="${it.key}">恢復</button>`;
+    }else if(l&&isDone(l)){
+      if(!it.x)tag=l.studentId?'<span class="chip">加課</span>':'';
+      right=stampHTML(l);
+    }else if(l){                                   // 排定的單次課（還沒上）
+      tag=l.movedFrom?`<span class="chip warn">調課</span>`:'<span class="chip warn">排定</span>';
+      if(l.movedFrom)extra=`<div class="moved">原本是 ${mdText(l.movedFrom.split('@')[0])} ${esc(l.movedFrom.split('@')[1]||'')}</div>`;
+      right=`<button class="btn small primary" type="button" data-done-lesson="${l.id}">記這堂課</button>`;
+      links=`<button class="link" type="button" data-move-lesson="${l.id}">調課</button><button class="link" type="button" data-note-lesson="${l.id}">${note?'改備註':'備註'}</button>`;
+    }else{                                         // 每週固定時段（還沒上）
+      right=`<button class="btn small primary" type="button" data-logday="${s.id}" data-date="${ds}" data-hours="${slotHours(it.x)}" data-start="${esc(it.x.start)}" data-end="${esc(it.x.end)}" data-key="${it.key}">記這堂課</button>`;
+      links=`<button class="link" type="button" data-move-slot="${s.id}" data-key="${it.key}" data-end="${esc(it.x.end)}">調課</button><button class="link" type="button" data-note-slot="${s.id}" data-key="${it.key}">${note?'改備註':'備註'}</button><button class="link red" type="button" data-skip="${s.id}" data-key="${it.key}">取消這堂</button>`;
+    }
+    const click=l?` data-edit-lesson="${l.id}" role="button" tabindex="0" style="cursor:pointer"`:'';
+    return `<div class="day-item${it.cancelled?' is-cancelled':''}"><div class="t">${t}</div><div style="min-width:0">
+      <div${click}>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:700"><span class="dot" style="background:${color}"></span>${esc(name)}${tag}</div>
+        ${sub?`<div class="muted" style="font-size:.84rem">${esc(sub)}</div>`:''}
+        ${extra}
+        ${l&&l.content?`<div style="font-size:.88rem;overflow-wrap:anywhere">${esc(l.content)}</div>`:''}
+        ${note?`<div class="note">${esc(note)}</div>`:''}
+      </div>
+      ${links?`<div class="links">${links}</div>`:''}
+    </div>${right||'<span></span>'}</div>`;
+  };
   const html=`${exams.length?`<div class="exams" style="margin:0">${exams.map(s=>`<span class="exam"><span class="dot" style="background:${colorOf(s)}"></span>${esc(s.name)}・${esc(s.examName||'考試')}</span>`).join('')}</div>`:''}
-    ${items.length?`<div>${rows}</div>`:'<p class="muted" style="margin:0">這天沒有排課</p>'}
-    <div class="btnrow"><button class="btn" type="button" data-logday="" data-date="${ds}">＋ 記一堂其他的課</button></div>`;
+    ${items.length?`<div>${items.map(row).join('')}</div>`:'<p class="muted" style="margin:0">這天沒有排課</p>'}
+    <div class="btnrow"><button class="btn" type="button" data-logday="" data-date="${ds}">＋ 新增一堂課</button></div>`;
   openSheet(`${d.getMonth()+1} 月 ${d.getDate()} 日（週${WD[d.getDay()]}）`,html,{type:'day',ds});
+}
+
+/* ---------- 調課 ---------- */
+/* 照學生目前的收費方式，算出一堂排定課要存的價格欄位 */
+function studentPricing(s,h){
+  if(s.billing==='session'){const sh=Number(s.sessionHours)||0;return {billing:'session',rate:0,price:Number(s.sessionPrice)||0,sessionHours:sh,sessions:sh?Math.max(1,Math.round(h/sh)):1}}
+  return {billing:'hour',rate:Number(s.rate)||0};
+}
+function openMove(o){
+  // o = {sid,key,end} 固定時段；或 {lessonId} 排定的單堂課
+  const back=S.sheet&&S.sheet.type==='day'?S.sheet.ds:null;
+  const l=o.lessonId?S.lessons.find(x=>x.id===o.lessonId):null;
+  const s=l?stu(l.studentId):stu(o.sid);
+  const fromDate=l?l.date:o.key.split('@')[0];
+  const fromStart=l?(l.start||''):o.key.split('@')[1];
+  const fromEnd=l?(l.end||''):o.end;
+  const name=l?lessonName(l):(s?s.name:'');
+  const html=`<form class="f" id="move-form" novalidate>
+    <div class="move-from"><span class="dot" style="background:${l?lessonColor(l):colorOf(s)}"></span><b>${esc(name)}</b><span>原本：${mdText(fromDate)} ${esc(fromStart)}${fromEnd?'–'+esc(fromEnd):''}</span></div>
+    <fieldset>
+      <div class="fld full"><label for="m-date">調到哪一天</label><input id="m-date" name="date" type="date" value="${esc(fromDate)}"></div>
+      <div class="fld"><label for="m-start">開始時間</label><input id="m-start" name="start" type="time" value="${esc(fromStart)}"></div>
+      <div class="fld"><label for="m-end">結束時間</label><input id="m-end" name="end" type="time" value="${esc(fromEnd)}"></div>
+      <div class="fld full"><label for="m-note">備註</label><input id="m-note" name="note" type="text" value="${esc(l?l.note||'':((s&&s.slotNotes)||{})[o.key]||'')}" placeholder="例如：學生段考前請假，改到週五"></div>
+    </fieldset>
+    <p class="muted" style="margin:0;font-size:.84rem">原本那天會標示「已調到」，新的那天會出現這堂課；之後可以按「取消調課」還原。</p>
+    <div class="err" id="form-err" hidden></div>
+    <div class="btnrow end"><button class="btn" type="button" data-act="${back?'back-day':'close'}">取消</button><button class="btn primary" type="submit">確定調課</button></div>
+  </form>`;
+  openSheet('調課',html,{type:'move',o,back,fromDate,fromStart});
+  $('#m-date').focus();
+}
+async function saveMove(form){
+  const st=S.sheet,o=st.o;const fd=new FormData(form);
+  const err=$('#form-err');const bad=m=>{err.textContent=m;err.hidden=false};
+  const date=fd.get('date'),start=fd.get('start')||'',end=fd.get('end')||'',note=(fd.get('note')||'').trim();
+  if(!date)return bad('請選擇要調到哪一天');
+  if(start&&end&&toMin(end)<=toMin(start))return bad('結束時間要比開始時間晚');
+  if(date===st.fromDate&&start===st.fromStart)return bad('日期和時間都沒有改變');
+  const btn=form.querySelector('[type=submit]');btn.disabled=true;
+  try{
+    if(o.lessonId){
+      const l=S.lessons.find(x=>x.id===o.lessonId);
+      const h=start&&end?(toMin(end)-toMin(start))/60:Number(l.hours)||1.5;
+      const upd={date,start,end,hours:h,note};
+      if(l.billing==='session'&&l.sessionHours)upd.sessions=Math.max(1,Math.round(h/l.sessionHours));
+      await db.doc('lessons/'+o.lessonId).update(upd);
+    }else{
+      const s=stu(o.sid);
+      const slot=(s.slots||[]).find(x=>x.start===st.fromStart)||{start:st.fromStart,end:o.end};
+      const h=start&&end?(toMin(end)-toMin(start))/60:slotHours(slot);
+      const data={studentId:s.id,date,start,end,hours:h,status:'planned',note,movedFrom:o.key,
+        content:'',homework:'',paid:false,createdAt:Date.now(),...studentPricing(s,h)};
+      await db.collection('lessons').add(data);
+      const skips=(s.skips||[]).filter(k=>k!==o.key);skips.push(o.key);
+      const notes={...(s.slotNotes||{})};delete notes[o.key];
+      await db.doc('students/'+s.id).update({skips,slotNotes:notes});
+    }
+    toast(`已調到 ${mdText(date)}`);
+    if(st.back)openDay(st.back);else closeSheet();
+  }catch(e){btn.disabled=false;fail(e)}
+}
+async function undoMove(lessonId,sid,key){
+  const s=stu(sid);
+  try{
+    await db.doc('lessons/'+lessonId).delete();
+    if(s)await db.doc('students/'+sid).update({skips:(s.skips||[]).filter(k=>k!==key)});
+    toast('已取消調課，恢復原本的時間');
+  }catch(e){fail(e)}
+}
+
+/* ---------- 備註 ---------- */
+function openNote(o){
+  // o = {sid,key} 固定時段；或 {lessonId}
+  const back=S.sheet&&S.sheet.type==='day'?S.sheet.ds:null;
+  const l=o.lessonId?S.lessons.find(x=>x.id===o.lessonId):null;
+  const s=l?stu(l.studentId):stu(o.sid);
+  const cur=l?(l.note||''):((s&&s.slotNotes)||{})[o.key]||'';
+  const when=l?`${mdText(l.date)} ${esc(l.start||'')}`:`${mdText(o.key.split('@')[0])} ${esc(o.key.split('@')[1])}`;
+  const html=`<form class="f" id="note-form" novalidate>
+    <div class="move-from"><span class="dot" style="background:${l?lessonColor(l):colorOf(s)}"></span><b>${esc(l?lessonName(l):(s?s.name:''))}</b><span>${when}</span></div>
+    <div class="fld"><label for="n-text">備註</label><textarea id="n-text" name="note" placeholder="例如：帶二次函數講義、考前加強、家長要一起談進度">${esc(cur)}</textarea></div>
+    <div class="btnrow end">${cur?'<button class="btn danger" type="button" data-act="clear-note">刪除備註</button>':''}<button class="btn" type="button" data-act="${back?'back-day':'close'}">取消</button><button class="btn primary" type="submit">儲存</button></div>
+  </form>`;
+  openSheet('備註',html,{type:'note',o,back});
+  $('#n-text').focus();
+}
+async function saveNote(text){
+  const st=S.sheet,o=st.o;text=(text||'').trim();
+  try{
+    if(o.lessonId)await db.doc('lessons/'+o.lessonId).update({note:text});
+    else{
+      const s=stu(o.sid);const notes={...(s.slotNotes||{})};
+      if(text)notes[o.key]=text;else delete notes[o.key];
+      await db.doc('students/'+s.id).update({slotNotes:notes});
+    }
+    toast(text?'已儲存備註':'已刪除備註');
+    if(st.back)openDay(st.back);else closeSheet();
+  }catch(e){fail(e)}
 }
 
 /* ---------- lessons ---------- */
@@ -427,51 +613,111 @@ function stampHTML(l){
                :`<button class="stamp unpaid" type="button" data-paid="${l.id}" aria-label="未收費，按一下蓋已收章">未收</button>`;
 }
 function lessonRow(l){
-  const s=stu(l.studentId);const d=l.date||'';
+  const d=l.date||'';
   return `<div class="row">
     <div class="date"><b>${d.slice(5).replace('-','/')}</b><span>週${wdOf(d)}</span></div>
     <div class="body" data-edit-lesson="${l.id}" role="button" tabindex="0">
-      <div class="who"><span class="dot" style="background:${colorOf(s)}"></span>${esc(s?s.name:'（已刪除的學生）')}<span class="h">${hrs(l.hours)} 小時・${l.billing==='session'?(l.sessions||1)+' 堂・':''}${money(lessonAmt(l))}</span></div>
+      <div class="who"><span class="dot" style="background:${lessonColor(l)}"></span>${esc(lessonName(l))}${l.studentId?'':'<span class="chip">試教／臨時</span>'}<span class="h">${hrs(l.hours)} 小時・${l.billing==='session'?(l.sessions||1)+' 堂・':''}${money(lessonAmt(l))}</span></div>
       ${l.content?`<div class="what">${esc(l.content)}</div>`:''}
       ${l.homework?`<div class="hw">作業：${esc(l.homework)}</div>`:''}
+      ${l.note?`<div class="hw">備註：${esc(l.note)}</div>`:''}
     </div>
     ${stampHTML(l)}
   </div>`;
 }
 function renderLog(){
-  let ls=S.lessons.slice();
-  if(S.fStudent!=='all')ls=ls.filter(l=>l.studentId===S.fStudent);
+  let ls=doneLessons();
+  if(S.fStudent==='__guest')ls=ls.filter(l=>!l.studentId);
+  else if(S.fStudent!=='all')ls=ls.filter(l=>l.studentId===S.fStudent);
   if(S.fPaid==='unpaid')ls=ls.filter(l=>!l.paid);
   ls.sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
   const groups={};ls.forEach(l=>{const m=(l.date||'').slice(0,7);(groups[m]=groups[m]||[]).push(l)});
-  const opts=['<option value="all">全部學生</option>'].concat(S.students.map(s=>`<option value="${s.id}"${S.fStudent===s.id?' selected':''}>${esc(s.name)}</option>`)).join('');
+  const opts=['<option value="all">全部學生</option>'].concat(S.students.map(s=>`<option value="${s.id}"${S.fStudent===s.id?' selected':''}>${esc(s.name)}</option>`)).concat([`<option value="__guest"${S.fStudent==='__guest'?' selected':''}>試教／臨時</option>`]).join('');
   return `<div class="section-head"><h2>上課紀錄</h2>
     <div class="filters"><select id="f-stu" aria-label="篩選學生">${opts}</select>
     <select id="f-paid" aria-label="篩選收費"><option value="all">全部</option><option value="unpaid"${S.fPaid==='unpaid'?' selected':''}>只看未收</option></select></div></div>
-    ${!S.lessons.length?`<div class="empty"><b>還沒有上課紀錄</b>每次上完課按「記一堂課」，寫下教了什麼、出了什麼作業。收到錢後點紅色印章就會蓋上「已收」。</div>`
+    ${!doneLessons().length?`<div class="empty"><b>還沒有上課紀錄</b>每次上完課按「記一堂課」，寫下教了什麼、出了什麼作業。收到錢後點紅色印章就會蓋上「已收」。</div>`
      :!ls.length?`<div class="empty">沒有符合條件的紀錄</div>`
      :Object.keys(groups).map(m=>`<h3 class="month-h">${monthLabel(m)}</h3><div class="rows">${groups[m].map(lessonRow).join('')}</div>`).join('')}`;
 }
 
+/* ---------- month forecast ---------- */
+/* 固定時段還沒上的課，照學生目前的收費方式估算 */
+function slotAmount(s,x){
+  const h=slotHours(x);
+  if(s.billing==='session'){const sh=Number(s.sessionHours)||0;const n=sh?Math.max(1,Math.round(h/sh)):1;return (Number(s.sessionPrice)||0)*n}
+  return (Number(s.rate)||0)*h;
+}
+/* 把一個月每一天的課分成三類：已上課 / 還會上 / 過了但沒記錄 */
+function forecast(m){
+  const [y,mm]=m.split('-').map(Number);const dim=new Date(y,mm,0).getDate();const td=today();
+  const blank=()=>({done:0,doneN:0,up:0,upN:0,miss:0,missN:0});
+  const by={},tot=blank();
+  const add=(k,f,amt)=>{const b=by[k]=by[k]||blank();b[f]+=amt;b[f+'N']++;tot[f]+=amt;tot[f+'N']++};
+  for(let d=1;d<=dim;d++){
+    const ds=`${m}-${pad(d)}`;
+    dayItems(ds).items.forEach(it=>{
+      if(it.cancelled)return;
+      if(it.l&&isDone(it.l)){add(keyOf(it.l),'done',lessonAmt(it.l));return}
+      const amt=it.l?lessonAmt(it.l):slotAmount(it.s,it.x);
+      add(it.l?keyOf(it.l):it.s.id,ds>=td?'up':'miss',amt);
+    });
+  }
+  return {by,tot};
+}
+function renderForecast(){
+  const {by,tot}=forecast(S.month);
+  const inc=S.fcMiss!==false;
+  const est=tot.done+tot.up+(inc?tot.miss:0);
+  const keys=Object.keys(by).sort((a,b)=>(a.startsWith('guest:')-b.startsWith('guest:'))||keyName(a).localeCompare(keyName(b),'zh-Hant'));
+  const pct=v=>est>0?(v/est*100).toFixed(2)+'%':'0%';
+  if(!keys.length)return `<section class="forecast"><div class="fc-head"><h3>月薪試算</h3></div><p class="fc-note">${monthLabel(S.month)}還沒有排課或上課紀錄。在學生資料填好每週時段和收費，或在月曆新增課程，這裡就會算出來。</p></section>`;
+  return `<section class="forecast" aria-label="月薪試算">
+    <div class="fc-head"><h3>月薪試算</h3>${tot.missN?`<label class="check"><input type="checkbox" id="fc-miss"${inc?' checked':''}> 把「過了但沒記錄」的也算進去</label>`:''}</div>
+    <div class="fc-sum">
+      <div class="part"><span class="lbl">已上課</span><b>${money(tot.done)}</b><small>${tot.doneN} 堂</small></div>
+      <span class="op">+</span>
+      <div class="part"><span class="lbl">還會上</span><b>${money(tot.up)}</b><small>${tot.upN} 堂</small></div>
+      ${tot.missN?`<span class="op">+</span><div class="part${inc?'':' off'}"><span class="lbl">過了但沒記錄</span><b>${money(tot.miss)}</b><small>${tot.missN} 堂</small></div>`:''}
+      <span class="op">=</span>
+      <div class="part total"><span class="lbl">預估月薪</span><b>${money(est)}</b></div>
+    </div>
+    <div class="fc-bar" role="img" aria-label="已上課 ${money(tot.done)}，還會上 ${money(tot.up)}"><span class="b-done" style="width:${pct(tot.done)}"></span><span class="b-up" style="width:${pct(tot.up)}"></span>${inc?`<span class="b-miss" style="width:${pct(tot.miss)}"></span>`:''}</div>
+    <div class="fc-legend"><span><i style="background:var(--accent)"></i>已上課</span><span><i style="background:var(--accent);opacity:.35"></i>還會上</span>${tot.missN?`<span><i style="background:var(--warn);opacity:.55"></i>過了但沒記錄（可能忘了記，或其實沒上）</span>`:''}</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>學生</th><th>已上課</th><th>還會上</th>${tot.missN?'<th>沒記錄</th>':''}<th>預估</th></tr></thead>
+      <tbody>${keys.map(k=>{const b=by[k];const e=b.done+b.up+(inc?b.miss:0);const s=stu(k);return `<tr>
+        <td><span class="dot" style="background:${k.startsWith('guest:')?'var(--muted)':colorOf(s)}"></span> ${esc(keyName(k))}</td>
+        <td>${b.doneN?`${money(b.done)}<span class="muted">・${b.doneN}堂</span>`:'—'}</td>
+        <td>${b.upN?`${money(b.up)}<span class="muted">・${b.upN}堂</span>`:'—'}</td>
+        ${tot.missN?`<td>${b.missN?`<span class="warn">${money(b.miss)}</span><span class="muted">・${b.missN}堂</span>`:'—'}</td>`:''}
+        <td><b>${money(e)}</b></td></tr>`}).join('')}</tbody>
+    </table></div>
+    <p class="fc-note">「還會上」是照每週固定時段（扣掉已取消的）和月曆上排定的課，用學生目前的收費估算；實際收入以「記這堂課」後的紀錄為準。</p>
+  </section>`;
+}
+
 /* ---------- month ---------- */
 function monthRows(){
-  const ls=S.lessons.filter(l=>(l.date||'').startsWith(S.month));
+  const ls=doneLessons().filter(l=>(l.date||'').startsWith(S.month));
   const by={};
-  ls.forEach(l=>{const k=l.studentId;(by[k]=by[k]||{n:0,h:0,t:0,d:0,ls:[]});const b=by[k];b.n++;b.h+=Number(l.hours)||0;b.t+=lessonAmt(l);if(!l.paid)b.d+=lessonAmt(l);b.ls.push(l)});
+  ls.forEach(l=>{const k=keyOf(l);(by[k]=by[k]||{n:0,h:0,t:0,d:0,ls:[]});const b=by[k];b.n++;b.h+=Number(l.hours)||0;b.t+=lessonAmt(l);if(!l.paid)b.d+=lessonAmt(l);b.ls.push(l)});
   return by;
 }
 function renderMonth(){
-  const by=monthRows();const ids=Object.keys(by).sort((a,b)=>((stu(a)||{}).name||'').localeCompare((stu(b)||{}).name||'','zh-Hant'));
+  const by=monthRows();const ids=Object.keys(by).sort((a,b)=>(a.startsWith('guest:')-b.startsWith('guest:'))||keyName(a).localeCompare(keyName(b),'zh-Hant'));
   const tot=ids.reduce((a,k)=>({n:a.n+by[k].n,h:a.h+by[k].h,t:a.t+by[k].t,d:a.d+by[k].d}),{n:0,h:0,t:0,d:0});
   return `<div class="section-head"><h2>月結算</h2>
     <div class="month-nav"><button class="btn small" type="button" data-month="-1" aria-label="上個月">‹</button><b>${monthLabel(S.month)}</b><button class="btn small" type="button" data-month="1" aria-label="下個月">›</button></div></div>
+    ${renderForecast()}
+    <h3 class="sub-h">實際收費（已上課）</h3>
     ${ids.length?`<div class="table-wrap"><table>
       <thead><tr><th>學生</th><th>堂數</th><th>時數</th><th>應收</th><th>未收</th><th></th></tr></thead>
       <tbody>${ids.map(k=>{const s=stu(k),b=by[k];return `<tr>
-        <td><span class="dot" style="background:${colorOf(s)}"></span> ${esc(s?s.name:'（已刪除）')}</td>
+        <td><span class="dot" style="background:${k.startsWith('guest:')?'var(--muted)':colorOf(s)}"></span> ${esc(keyName(k))}</td>
         <td>${b.n}</td><td>${hrs(b.h)}</td><td>${money(b.t)}</td>
         <td>${b.d>0?`<span class="due">${money(b.d)}</span>`:'<span class="ok">已收齊</span>'}</td>
-        <td class="act"><button class="btn small" type="button" data-copybill="${k}">複製對帳訊息</button>${b.d>0?`<button class="btn small" type="button" data-payall="${k}">全部收齊</button>`:''}</td>
+        <td class="act">${k.startsWith('guest:')?'':`<button class="btn small" type="button" data-copybill="${k}">複製對帳訊息</button>`}${b.d>0?`<button class="btn small" type="button" data-payall="${k}">全部收齊</button>`:''}</td>
       </tr>`}).join('')}</tbody>
       <tfoot><tr><td>合計</td><td>${tot.n}</td><td>${hrs(tot.h)}</td><td>${money(tot.t)}</td><td>${tot.d>0?`<span class="due">${money(tot.d)}</span>`:'—'}</td><td></td></tr></tfoot>
     </table></div>`:`<div class="empty"><b>${monthLabel(S.month)}沒有上課紀錄</b>用上方箭頭切換月份。</div>`}
@@ -499,7 +745,7 @@ function closeSheet(){$('#sheet').hidden=true;S.sheet=null}
 
 function openStudent(id,refresh){
   const s=stu(id);if(!s){if(refresh)closeSheet();return}
-  const ls=S.lessons.filter(l=>l.studentId===id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const ls=doneLessons().filter(l=>l.studentId===id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const due=ls.filter(l=>!l.paid).reduce((a,l)=>a+lessonAmt(l),0);
   const row=(k,v)=>v?`<dt>${k}</dt><dd>${v}</dd>`:'';
   const html=`
@@ -561,49 +807,67 @@ function studentForm(id){
   syncBilling();
   $('#s-name').focus();
 }
-function lessonForm(id,presetStudent,presetDate,presetHours){
+function lessonForm(id,presetStudent,presetDate,presetHours,opts){
+  opts=opts||{};
   const back=S.sheet&&S.sheet.type==='day'?S.sheet:null;
   const l=id?S.lessons.find(x=>x.id===id):null;
   const act=active();
-  if(!l&&!act.length){toast('請先新增學生');return}
-  const sid=l?l.studentId:(presetStudent||act[0].id);
+  const sid=l?(l.studentId||'__guest'):(presetStudent||(act[0]?act[0].id:'__guest'));
   const ps=stu(sid);
-  const defH=l?l.hours:(presetHours>0?presetHours:(ps&&ps.slots&&ps.slots[0]?slotHours(ps.slots[0]):(ps&&ps.billing==='session'&&ps.sessionHours?ps.sessionHours:2)));
-  const list=l&&!act.find(s=>s.id===sid)&&stu(sid)?act.concat([stu(sid)]):act;
+  const date=l?l.date:(presetDate||today());
+  const status=opts.status||(l?(l.status==='planned'?'planned':'done'):(date>today()?'planned':'done'));
+  const start=l?(l.start||''):(opts.start||'');
+  const end=l?(l.end||''):(opts.end||'');
+  const defH=l?l.hours:(presetHours>0?presetHours:(ps&&ps.slots&&ps.slots[0]?slotHours(ps.slots[0]):(ps&&ps.billing==='session'&&ps.sessionHours?ps.sessionHours:1.5)));
+  const list=l&&l.studentId&&!act.find(s=>s.id===sid)&&stu(sid)?act.concat([stu(sid)]):act;
+  const opt=list.map(s=>`<option value="${s.id}"${s.id===sid?' selected':''}>${esc(s.name)}${s.subject?'・'+esc(s.subject):''}</option>`).join('')+
+    `<option value="__guest"${sid==='__guest'?' selected':''}>其他（試教／臨時學生）</option>`;
   const html=`<form class="f" id="lesson-form" novalidate>
     <fieldset>
-      <div class="fld full"><label for="l-stu">學生</label><select id="l-stu" name="studentId">${list.map(s=>`<option value="${s.id}"${s.id===sid?' selected':''}>${esc(s.name)}${s.subject?'・'+esc(s.subject):''}</option>`).join('')}</select></div>
-      <div class="fld"><label for="l-date">日期</label><input id="l-date" name="date" type="date" value="${esc(l?l.date:(presetDate||today()))}"></div>
+      <div class="fld full"><label for="l-stu">學生</label><select id="l-stu" name="studentId">${opt}</select></div>
+      <div class="fld full" id="l-guest-wrap"><label for="l-guest">學生名字</label><input id="l-guest" name="guestName" type="text" value="${esc(l?l.guestName||'':'')}" placeholder="例如：試教・陳同學（國二）"></div>
+      <div class="fld"><label for="l-date">日期</label><input id="l-date" name="date" type="date" value="${esc(date)}"></div>
+      <div class="fld"><label for="l-status">狀態</label><select id="l-status" name="status"><option value="done"${status==='done'?' selected':''}>已上課</option><option value="planned"${status==='planned'?' selected':''}>排定（還沒上）</option></select></div>
+      <div class="fld"><label for="l-start">開始時間</label><input id="l-start" name="start" type="time" value="${esc(start)}"></div>
+      <div class="fld"><label for="l-end">結束時間</label><input id="l-end" name="end" type="time" value="${esc(end)}"></div>
       <div class="fld"><label for="l-hours">時數（小時）</label><input id="l-hours" name="hours" type="number" min="0.5" step="0.5" inputmode="decimal" value="${hrs(defH)}"></div>
       <div class="fld" id="l-sess-wrap" hidden><label for="l-sessions">堂數</label><input id="l-sessions" name="sessions" type="number" min="1" step="1" inputmode="numeric" value="${l&&l.sessions?l.sessions:1}"></div>
-      <div class="fld full"><label for="l-content">教了什麼</label><textarea id="l-content" name="content" placeholder="例如：講解 2-3 正餘弦定理，寫課本例題 1–6">${esc(l?l.content:'')}</textarea></div>
-      <div class="fld full"><label for="l-hw">出的作業</label><input id="l-hw" name="homework" type="text" value="${esc(l?l.homework:'')}" placeholder="例如：習作 p.45–47"></div>
-      <div class="fld full"><label class="check"><input type="checkbox" name="paid"${l&&l.paid?' checked':''}> 這堂已收費</label></div>
+      <div class="fld" id="l-amount-wrap"><label for="l-amount">這堂金額（元）</label><input id="l-amount" name="amount" type="number" min="0" step="50" inputmode="numeric" value="${esc(l&&l.billing==='fixed'?l.amount:'')}" placeholder="試教沒收費就填 0"></div>
+      <div class="fld full" data-done-only><label for="l-content">教了什麼</label><textarea id="l-content" name="content" placeholder="例如：講解 2-3 正餘弦定理，寫課本例題 1–6">${esc(l?l.content:'')}</textarea></div>
+      <div class="fld full" data-done-only><label for="l-hw">出的作業</label><input id="l-hw" name="homework" type="text" value="${esc(l?l.homework:'')}" placeholder="例如：習作 p.45–47"></div>
+      <div class="fld full"><label for="l-note">備註</label><input id="l-note" name="note" type="text" value="${esc(l?l.note||'':(opts.note||''))}" placeholder="給自己的提醒，例如：下次帶講義"></div>
+      <div class="fld full" data-done-only><label class="check"><input type="checkbox" name="paid"${l&&l.paid?' checked':''}> 這堂已收費</label></div>
     </fieldset>
     <p class="muted" id="l-amt" style="margin:0"></p>
     <div class="err" id="form-err" hidden></div>
-    <div class="btnrow end">${id?`<button class="btn danger" type="button" data-del-lesson="${id}">刪除紀錄</button>`:''}<button class="btn" type="button" data-act="close">取消</button><button class="btn primary" type="submit">儲存</button></div>
+    <div class="btnrow end">${id?`<button class="btn danger" type="button" data-del-lesson="${id}">刪除這堂</button>`:''}<button class="btn" type="button" data-act="close">取消</button><button class="btn primary" type="submit">儲存</button></div>
   </form>`;
-  openSheet(id?'編輯上課紀錄':'記一堂課',html,{type:'lesson-form',id,back});
+  const title=id?(opts.status==='done'?'記這堂課':'編輯這堂課'):(status==='planned'?'新增一堂課':'記一堂課');
+  openSheet(title,html,{type:'lesson-form',id,back});
   updateAmt();
 }
-/* 這堂課用哪種收費：編輯舊紀錄時沿用當時的價格，新紀錄用學生目前的設定 */
+/* 這堂課用哪種收費：試教／臨時 = 自己填金額；編輯舊紀錄時沿用當時的價格；新紀錄用學生目前的設定 */
 function formPricing(){
-  const s=stu($('#l-stu').value)||{};
+  const v=$('#l-stu').value;
+  if(v==='__guest')return {billing:'fixed',amount:Number($('#l-amount').value)||0};
+  const s=stu(v)||{};
   const l=S.sheet&&S.sheet.id?S.lessons.find(x=>x.id===S.sheet.id):null;
-  if(l&&l.studentId===s.id)return {billing:l.billing||'hour',rate:Number(l.rate)||0,price:Number(l.price)||0,sessionHours:Number(l.sessionHours)||0};
+  if(l&&l.studentId===s.id&&l.billing!=='fixed')return {billing:l.billing||'hour',rate:Number(l.rate)||0,price:Number(l.price)||0,sessionHours:Number(l.sessionHours)||0};
   return {billing:s.billing==='session'?'session':'hour',rate:Number(s.rate)||0,price:Number(s.sessionPrice)||0,sessionHours:Number(s.sessionHours)||0};
 }
 function updateAmt(){
   const el=$('#l-amt');if(!el)return;
   const p=formPricing();const h=Number($('#l-hours').value)||0;
+  const planned=$('#l-status').value==='planned';
+  $('#l-guest-wrap').hidden=p.billing!=='fixed';
+  $('#l-amount-wrap').hidden=p.billing!=='fixed';
   $('#l-sess-wrap').hidden=p.billing!=='session';
-  if(p.billing==='session'){
-    const n=Number($('#l-sessions').value)||0;
-    el.textContent=p.price?`按堂計費 ${money(p.price)} / 堂 × ${n} 堂：${money(p.price*n)}`:'這位學生還沒填每堂價格，金額會算成 $0';
-  }else{
-    el.textContent=p.rate?`以時薪 ${money(p.rate)} 計算：${money(p.rate*h)}`:'這位學生還沒填時薪，金額會算成 $0';
-  }
+  document.querySelectorAll('[data-done-only]').forEach(e=>e.hidden=planned);
+  let t;
+  if(p.billing==='fixed')t=`這堂金額：${money(p.amount)}`;
+  else if(p.billing==='session'){const n=Number($('#l-sessions').value)||0;t=p.price?`按堂計費 ${money(p.price)} / 堂 × ${n} 堂：${money(p.price*n)}`:'這位學生還沒填每堂價格，金額會算成 $0'}
+  else t=p.rate?`以時薪 ${money(p.rate)} 計算：${money(p.rate*h)}`:'這位學生還沒填時薪，金額會算成 $0';
+  el.textContent=planned?t+'（排定的課要等上完、按「記這堂課」後才會算進月結算）':t;
 }
 function syncBilling(){
   const b=$('#s-billing');if(!b)return;
@@ -630,24 +894,39 @@ async function saveStudent(form){
 }
 async function saveLesson(form){
   const fd=new FormData(form);const id=S.sheet.id;
-  const sid=fd.get('studentId');const s=stu(sid);const h=Number(fd.get('hours'));
-  const err=$('#form-err');
-  if(!fd.get('date')){err.textContent='請選擇日期';err.hidden=false;return}
-  if(!(h>0)){err.textContent='時數要大於 0';err.hidden=false;return}
+  const sel=fd.get('studentId');const isGuest=sel==='__guest';
+  const s=isGuest?null:stu(sel);const h=Number(fd.get('hours'));
+  const err=$('#form-err');const bad=m=>{err.textContent=m;err.hidden=false};
+  const status=fd.get('status')==='planned'?'planned':'done';
+  const guestName=(fd.get('guestName')||'').trim();
+  if(isGuest&&!guestName)return bad('請填學生名字');
+  if(!fd.get('date'))return bad('請選擇日期');
+  if(!(h>0))return bad('時數要大於 0');
   const prev=id?S.lessons.find(x=>x.id===id):null;
   const p=formPricing();
   const n=Math.round(Number(fd.get('sessions'))||0);
-  if(p.billing==='session'&&!(n>=1)){err.textContent='堂數至少 1 堂';err.hidden=false;return}
-  const data={studentId:sid,date:fd.get('date'),hours:h,content:(fd.get('content')||'').trim(),homework:(fd.get('homework')||'').trim(),paid:!!fd.get('paid'),
-    billing:p.billing,rate:p.rate,createdAt:prev?prev.createdAt||Date.now():Date.now()};
+  if(p.billing==='session'&&!(n>=1))return bad('堂數至少 1 堂');
+  const data={studentId:isGuest?null:sel,date:fd.get('date'),hours:h,start:fd.get('start')||'',end:fd.get('end')||'',status,
+    content:(fd.get('content')||'').trim(),homework:(fd.get('homework')||'').trim(),paid:status==='done'&&!!fd.get('paid'),
+    billing:p.billing,rate:p.rate||0,createdAt:prev?prev.createdAt||Date.now():Date.now()};
+  data.note=(fd.get('note')||'').trim();
+  if(prev&&prev.movedFrom)data.movedFrom=prev.movedFrom;
+  if(isGuest){data.guestName=guestName;data.amount=p.amount}
   if(p.billing==='session'){data.price=p.price;data.sessionHours=p.sessionHours;data.sessions=n}
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{
     if(id)await db.doc('lessons/'+id).set(data);else await db.collection('lessons').add(data);
     const back=S.sheet&&S.sheet.back;
-    if(back)openDay(back.ds);else if(s&&!id&&S.sheet){openStudent(sid)}else closeSheet();
-    toast(id?'已更新紀錄':`已記下 ${s?s.name:''} 的課`);
+    if(back)openDay(back.ds);else if(s&&!id&&S.sheet&&status==='done'){openStudent(sel)}else closeSheet();
+    toast(status==='planned'?'已排進月曆':id?'已更新紀錄':`已記下 ${isGuest?guestName:(s?s.name:'')} 的課`);
   }catch(e){btn.disabled=false;fail(e)}
+}
+/* 取消／恢復某一天原本排定的固定時段 */
+async function setSkip(sid,key,on){
+  const s=stu(sid);if(!s)return;
+  const cur=(s.skips||[]).filter(k=>k!==key);
+  if(on)cur.push(key);
+  try{await db.doc('students/'+sid).update({skips:cur});toast(on?'已取消這堂':'已恢復這堂')}catch(e){fail(e)}
 }
 async function togglePaid(id){
   const l=S.lessons.find(x=>x.id===id);if(!l||busy.has(id))return;
@@ -655,7 +934,7 @@ async function togglePaid(id){
   try{await db.doc('lessons/'+id).update({paid:!l.paid})}catch(e){fail(e)}finally{busy.delete(id)}
 }
 async function payAll(sid){
-  const ls=S.lessons.filter(l=>l.studentId===sid&&!l.paid&&(l.date||'').startsWith(S.month));
+  const ls=doneLessons().filter(l=>keyOf(l)===sid&&!l.paid&&(l.date||'').startsWith(S.month));
   try{for(const l of ls)await db.doc('lessons/'+l.id).update({paid:true});toast(`已收齊 ${ls.length} 堂`)}catch(e){fail(e)}
 }
 function armDelete(btn,label,go){
@@ -731,7 +1010,7 @@ document.addEventListener('click',e=>{
   if(d.tab){S.tab=d.tab;render();return}
   if(d.act==='close'){closeSheet();return}
   if(d.act==='new-student'){if(!db){toast('尚未連上資料庫');return}studentForm();return}
-  if(d.act==='new-lesson'){if(!db){toast('尚未連上資料庫');return}lessonForm();return}
+  if(d.act==='new-lesson'){if(!db){toast('尚未連上資料庫');return}lessonForm(null,null,null,null,{status:'done'});return}
   if(d.act==='backup'){backup();return}
   if(d.act==='import'){const f=$('#import-file');f.value='';f.click();return}
   if(d.act==='confirm-import'){confirmImport();return}
@@ -746,7 +1025,17 @@ document.addEventListener('click',e=>{
   if(d.month){S.month=shiftMonth(S.month,Number(d.month));render();return}
   if(d.calmonth!==undefined){S.calMonth=Number(d.calmonth)===0?today().slice(0,7):shiftMonth(S.calMonth,Number(d.calmonth));render();return}
   if(d.day){openDay(d.day);return}
-  if(d.logday!==undefined){lessonForm(null,d.logday||null,d.date,Number(d.hours)||0);return}
+  if(d.logday!==undefined){const ns=d.logday&&stu(d.logday);lessonForm(null,d.logday||null,d.date,Number(d.hours)||0,{start:d.start||'',end:d.end||'',status:d.logday?'done':undefined,note:ns&&d.key?((ns.slotNotes||{})[d.key]||''):''});return}
+  if(d.moveSlot){openMove({sid:d.moveSlot,key:d.key,end:d.end});return}
+  if(d.moveLesson){openMove({lessonId:d.moveLesson});return}
+  if(d.noteSlot){openNote({sid:d.noteSlot,key:d.key});return}
+  if(d.noteLesson){openNote({lessonId:d.noteLesson});return}
+  if(d.unmove){undoMove(d.unmove,d.sid,d.key);return}
+  if(d.act==='back-day'){openDay(S.sheet.back);return}
+  if(d.act==='clear-note'){saveNote('');return}
+  if(d.doneLesson){lessonForm(d.doneLesson,null,null,null,{status:'done'});return}
+  if(d.skip){setSkip(d.skip,d.key,true);return}
+  if(d.unskip){setSkip(d.unskip,d.key,false);return}
   if(t.hasAttribute('data-addslot')){$('#slots').insertAdjacentHTML('beforeend',slotRow());return}
   if(t.hasAttribute('data-rmslot')){t.closest('.slot-row').remove();return}
   if(d.delStudent){delStudent(d.delStudent,t);return}
@@ -761,11 +1050,15 @@ document.addEventListener('submit',e=>{
   e.preventDefault();
   if(e.target.id==='student-form')saveStudent(e.target);
   if(e.target.id==='lesson-form')saveLesson(e.target);
+  if(e.target.id==='move-form')saveMove(e.target);
+  if(e.target.id==='note-form')saveNote($('#n-text').value);
 });
 document.addEventListener('change',e=>{
   if(e.target.id==='f-stu'){S.fStudent=e.target.value;render()}
   if(e.target.id==='f-paid'){S.fPaid=e.target.value;render()}
   if(e.target.id==='s-billing')syncBilling();
+  if(e.target.id==='l-status')updateAmt();
+  if(e.target.id==='fc-miss'){S.fcMiss=e.target.checked;render()}
   if(e.target.id==='l-stu'){
     const p=formPricing();
     if(!(S.sheet&&S.sheet.id)&&p.billing==='session'&&p.sessionHours){$('#l-hours').value=hrs(p.sessionHours);$('#l-sessions').value=1}
@@ -779,7 +1072,15 @@ document.addEventListener('input',e=>{
     if(p.billing==='session'&&p.sessionHours&&h>0)$('#l-sessions').value=Math.max(1,Math.round(h/p.sessionHours));
     updateAmt();
   }
-  if(e.target.id==='l-sessions')updateAmt();
+  if(e.target.id==='l-sessions'||e.target.id==='l-amount')updateAmt();
+  if(e.target.id==='l-start'||e.target.id==='l-end'){
+    const a=$('#l-start').value,b=$('#l-end').value;
+    if(a&&b&&toMin(b)>toMin(a)){
+      const h=(toMin(b)-toMin(a))/60;$('#l-hours').value=hrs(h);
+      const p=formPricing();if(p.billing==='session'&&p.sessionHours)$('#l-sessions').value=Math.max(1,Math.round(h/p.sessionHours));
+      updateAmt();
+    }
+  }
 });
 
 /* ---------- boot ---------- */
