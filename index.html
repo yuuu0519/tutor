@@ -354,6 +354,7 @@ function fail(e){
 const stu=id=>S.students.find(s=>s.id===id);
 const colorOf=s=>`var(--c${(s&&Number.isInteger(s.color))?s.color%6:0})`;
 const active=()=>S.students.filter(s=>s.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+const scheduledOn=ds=>S.students.filter(s=>s.active!==false?true:!!(s.endDate&&ds<=s.endDate)).sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
 /* 只有「已上課」的才算錢；排定（還沒上）的課只出現在月曆 */
 const isDone=l=>l.status!=='planned';
 const doneLessons=()=>S.lessons.filter(isDone);
@@ -384,7 +385,7 @@ function renderSummary(){
 function cardHTML(s){
   const ex=s.examDate&&daysUntil(s.examDate)>=0?`<span class="chip warn">${esc(s.examName||'考試')} D-${daysUntil(s.examDate)}</span>`:'';
   return `<button class="card" type="button" data-open="${s.id}">
-    <div class="card-top"><span class="dot" style="background:${colorOf(s)}"></span><b>${esc(s.name)}</b><span class="grade">${esc(s.grade)}</span></div>
+    <div class="card-top"><span class="dot" style="background:${colorOf(s)}"></span><b>${esc(s.name)}</b><span class="grade">${esc(s.grade)}</span>${s.active===false?`<span class="chip" style="margin-left:auto">${s.endDate?esc(s.endDate.slice(5).replace('-','/'))+' 結束':'已結束'}</span>`:''}</div>
     <div class="meta">${esc([s.subject,s.location].filter(Boolean).join(' · '))||'&nbsp;'}</div>
     ${s.slots&&s.slots.length?`<div class="slots">${esc(slotsText(s))}</div>`:''}
     ${s.progress?`<div class="prog"><span class="lbl-inline">進度</span>${esc(s.progress)}</div>`:''}
@@ -392,14 +393,14 @@ function cardHTML(s){
   </button>`;
 }
 function renderStudents(){
-  const act=active(), old=S.students.filter(s=>s.active===false);
+  const act=active(), old=S.students.filter(s=>s.active===false).sort((a,b)=>(b.endDate||'').localeCompare(a.endDate||''));
   if(!S.students.length) return `<div class="section-head"><h2>我的學生</h2></div>
     <div class="empty"><b>還沒有學生</b>按上方「＋ 新增學生」建立第一位，之後就能排課表、記錄上課和算鐘點費。</div>`;
   const exams=act.filter(s=>s.examDate&&daysUntil(s.examDate)>=0&&daysUntil(s.examDate)<=60).sort((a,b)=>a.examDate.localeCompare(b.examDate));
   return `<div class="section-head"><h2>我的學生</h2><span class="muted">${act.length} 位上課中</span></div>
     ${exams.length?`<div class="exams">${exams.map(s=>`<span class="exam"><span class="dot" style="background:${colorOf(s)}"></span>${esc(s.name)}・${esc(s.examName||'考試')}<span class="d">${daysUntil(s.examDate)===0?'今天':'D-'+daysUntil(s.examDate)}</span></span>`).join('')}</div>`:''}
     <div class="grid">${act.map(cardHTML).join('')}</div>
-    ${old.length?`<details class="inactive"><summary>已結束的學生（${old.length}）</summary><div class="grid">${old.map(cardHTML).join('')}</div></details>`:''}`;
+    ${old.length?`<details class="inactive"><summary>已結束課程的學生（${old.length}）・上課紀錄都還在</summary><div class="grid">${old.map(cardHTML).join('')}</div></details>`:''}`;
 }
 
 /* ---------- month calendar ---------- */
@@ -410,14 +411,14 @@ function dayItems(ds){
   const used=new Set(),items=[];
   // 先找「時間完全一樣」的紀錄對應固定時段；剩下的已上課紀錄，再對應同一天同一位學生還沒對到的時段
   const pairs=new Map();
-  active().forEach(s=>{
+  scheduledOn(ds).forEach(s=>{
     if(s.startDate&&ds<s.startDate)return;
     const slots=(s.slots||[]).filter(x=>Number(x.day)===wd);
     slots.forEach(x=>{const l=ls.find(l=>isDone(l)&&l.studentId===s.id&&!used.has(l.id)&&(!l.start||l.start===x.start));if(l){used.add(l.id);pairs.set(s.id+'@'+x.start,l)}});
     slots.forEach(x=>{const k=s.id+'@'+x.start;if(pairs.has(k)||(s.skips||[]).includes(ds+'@'+x.start))return;
       const l=ls.find(l=>isDone(l)&&l.studentId===s.id&&!used.has(l.id)&&!l.movedFrom);if(l){used.add(l.id);pairs.set(k,l)}});
   });
-  active().forEach(s=>{
+  scheduledOn(ds).forEach(s=>{
     if(s.startDate&&ds<s.startDate)return;           // 還沒開始上課的日子不排
     (s.slots||[]).forEach(x=>{
       if(Number(x.day)!==wd)return;
@@ -787,14 +788,16 @@ function openStudent(id,refresh){
     <dl class="info">
       ${row('年級',esc(s.grade))}${row('學校',esc(s.school))}${row('科目',esc(s.subject))}
       ${row('上課時段',esc(slotsText(s)))}${row('地點',esc(s.location))}
-      ${row('收費',`<span class="num">${priceText(s)}</span>`)}${row('開始日期',esc(s.startDate))}
+      ${row('收費',`<span class="num">${priceText(s)}</span>`)}${row('開始日期',esc(s.startDate))}${s.active===false?row('結束課程',`${esc(s.endDate||'')}${s.endReason?'（'+esc(s.endReason)+'）':''}`):''}
       ${row('使用教材',esc(s.textbook))}${row('目前進度',esc(s.progress))}${row('弱點',esc(s.weakness))}
       ${row('下次考試',s.examDate?`${esc(s.examName||'考試')}・${esc(s.examDate)}${daysUntil(s.examDate)>=0?`（還有 ${daysUntil(s.examDate)} 天）`:''}`:'')}
       ${row('家長',esc(s.parentName))}
       ${s.parentContact?`<dt>聯絡方式</dt><dd><span class="contact"><code>${esc(s.parentContact)}</code><button class="btn small" type="button" data-copy="${esc(s.parentContact)}">複製</button></span></dd>`:''}
       ${row('備註',esc(s.notes))}
     </dl>
-    <div class="btnrow"><button class="btn primary" type="button" data-new-lesson="${s.id}">記一堂課</button><button class="btn" type="button" data-edit-student="${s.id}">編輯資料</button></div>
+    <div class="btnrow"><button class="btn primary" type="button" data-new-lesson="${s.id}">記一堂課</button><button class="btn" type="button" data-edit-student="${s.id}">編輯資料</button>${s.active===false
+      ?`<button class="btn" type="button" data-resume="${s.id}">恢復上課</button>`
+      :`<button class="btn" type="button" data-end-student="${s.id}">結束課程</button>`}</div>
     <div><p class="block-title">最近上課（共 ${ls.length} 堂${due>0?`・未收 <span class="num" style="color:var(--stamp)">${money(due)}</span>`:''}）</p>
       ${ls.length?`<div class="mini-rows">${ls.slice(0,8).map(l=>`<div class="mini"><div class="num"><b>${(l.date||'').slice(5).replace('-','/')}</b><br><span class="muted" style="font-size:.76rem">${hrs(l.hours)} 小時</span></div><div style="min-width:0;cursor:pointer" data-edit-lesson="${l.id}" role="button" tabindex="0"><div style="overflow-wrap:anywhere">${esc(l.content||'（未填內容）')}</div>${l.homework?`<div class="muted" style="font-size:.82rem;overflow-wrap:anywhere">作業：${esc(l.homework)}</div>`:''}</div>${stampHTML(l)}</div>`).join('')}</div>`:'<p class="muted" style="margin:0">還沒有紀錄</p>'}
     </div>`;
@@ -924,7 +927,7 @@ async function saveStudent(form){
   const prev=id?stu(id):{};
   const data={...prev};delete data.id;
   ['name','grade','school','subject','location','startDate','textbook','progress','weakness','examName','examDate','parentName','parentContact','notes'].forEach(k=>data[k]=(fd.get(k)||'').trim());
-  data.name=name;data.billing=fd.get('billing')==='session'?'session':'hour';data.rate=Number(fd.get('rate'))||0;data.sessionPrice=Number(fd.get('sessionPrice'))||0;data.sessionHours=Number(fd.get('sessionHours'))||0;data.color=Number(fd.get('color'))||0;data.active=!!fd.get('active');data.slots=slots;
+  data.name=name;data.billing=fd.get('billing')==='session'?'session':'hour';data.rate=Number(fd.get('rate'))||0;data.sessionPrice=Number(fd.get('sessionPrice'))||0;data.sessionHours=Number(fd.get('sessionHours'))||0;data.color=Number(fd.get('color'))||0;data.active=!!fd.get('active');if(!data.active&&!data.endDate)data.endDate=today();if(data.active){data.endDate='';data.endReason=''}data.slots=slots;
   if(!id)data.createdAt=Date.now();
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{
@@ -983,8 +986,41 @@ function armDelete(btn,label,go){
   const orig=btn.textContent;btn.classList.add('arm');btn.textContent=label;
   setTimeout(()=>{if(btn.isConnected){btn.classList.remove('arm');btn.textContent=orig}},4000);
 }
+function openEnd(sid){
+  const s=stu(sid);if(!s)return;
+  const td=today();
+  const future=S.lessons.filter(l=>l.studentId===sid&&!isDone(l)&&l.date>td);
+  const html=`<form class="f" id="end-form" novalidate>
+    <p style="margin:0">結束後，${esc(s.name)}會移到「已結束課程的學生」，<b>所有上課紀錄和收費都會保留</b>，月結算和上課紀錄照常看得到。</p>
+    <fieldset>
+      <div class="fld"><label for="e-date">最後一堂課的日期</label><input id="e-date" name="endDate" type="date" value="${td}"></div>
+      <div class="fld"><label for="e-reason">原因（可不填）</label><input id="e-reason" name="endReason" type="text" placeholder="例如：學測結束、改去補習班"></div>
+    </fieldset>
+    <p class="muted" style="margin:0;font-size:.84rem">這天之後，月曆不會再排這位學生的固定時段。${future.length?`另外有 ${future.length} 堂已排定、還沒上的單堂課在這天之後，會一起刪除。`:''}</p>
+    <div class="err" id="form-err" hidden></div>
+    <div class="btnrow end"><button class="btn" type="button" data-act="back-student">取消</button><button class="btn primary" type="submit">確定結束課程</button></div>
+  </form>`;
+  openSheet(`結束 ${esc(s.name)} 的課程`,html,{type:'end',sid});
+}
+async function saveEnd(form){
+  const sid=S.sheet.sid;const fd=new FormData(form);
+  const endDate=fd.get('endDate');
+  if(!endDate){const e=$('#form-err');e.textContent='請選擇最後一堂課的日期';e.hidden=false;return}
+  const drop=S.lessons.filter(l=>l.studentId===sid&&!isDone(l)&&l.date>endDate);
+  const btn=form.querySelector('[type=submit]');btn.disabled=true;
+  try{
+    await db.doc('students/'+sid).update({active:false,endDate,endReason:(fd.get('endReason')||'').trim()});
+    for(const l of drop)await db.doc('lessons/'+l.id).delete();
+    toast('已結束課程，紀錄都保留著');
+    openStudent(sid);
+  }catch(e){btn.disabled=false;fail(e)}
+}
+async function resumeStudent(sid){
+  try{await db.doc('students/'+sid).update({active:true,endDate:'',endReason:''});toast('已恢復上課')}catch(e){fail(e)}
+}
 async function delStudent(id,btn){
   const ls=S.lessons.filter(l=>l.studentId===id);
+  if(ls.length&&!btn.classList.contains('arm')){const e=$('#form-err');if(e){e.textContent=`刪除會連同 ${ls.length} 筆上課紀錄一起刪掉，月結算也會少掉這些錢。只是不再上課的話，請改用學生頁的「結束課程」。`;e.hidden=false}}
   armDelete(btn,ls.length?`確定刪除？連同 ${ls.length} 筆紀錄`:'再按一次確定刪除',async()=>{
     btn.disabled=true;
     try{for(const l of ls)await db.doc('lessons/'+l.id).delete();await db.doc('students/'+id).delete();closeSheet();toast('已刪除學生')}catch(e){btn.disabled=false;fail(e)}
@@ -1144,6 +1180,9 @@ document.addEventListener('click',e=>{
   if(t.hasAttribute('data-addslot')){$('#slots').insertAdjacentHTML('beforeend',slotRow());return}
   if(t.hasAttribute('data-rmslot')){t.closest('.slot-row').remove();return}
   if(d.delStudent){delStudent(d.delStudent,t);return}
+  if(d.endStudent){openEnd(d.endStudent);return}
+  if(d.resume){resumeStudent(d.resume);return}
+  if(d.act==='back-student'){openStudent(S.sheet.sid);return}
   if(d.delLesson){delLesson(d.delLesson,t);return}
 });
 document.addEventListener('keydown',e=>{
@@ -1157,6 +1196,7 @@ document.addEventListener('submit',e=>{
   if(e.target.id==='student-form')saveStudent(e.target);
   if(e.target.id==='lesson-form')saveLesson(e.target);
   if(e.target.id==='bill-form')copyBill();
+  if(e.target.id==='end-form')saveEnd(e.target);
   if(e.target.id==='move-form')saveMove(e.target);
   if(e.target.id==='note-form')saveNote($('#n-text').value);
 });
